@@ -1,0 +1,39 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Deny",
+            "Action": [
+                "ec2:RunInstances"
+            ],
+            "Resource": [
+                "*"
+            ],
+            "Condition": {
+                "StringNotEquals": {
+                    "ec2:InstanceType": [
+                        "m5a.large"
+                    ]
+                }
+            }
+        },
+        {
+            "Effect": "Deny",
+            "Action": [
+                "autoscaling:CreateLaunchConfiguration",
+                "autoscaling:CreateAutoScalingGroup",
+                "autoscaling:UpdateAutoScalingGroup"
+            ],
+            "Resource": [
+                "*"
+            ],
+            "Condition": {
+                "StringNotEquals": {
+                    "autoscaling:InstanceType": [
+                        "m5a.large"
+                    ]
+                }
+            }
+        }
+    ]
+}
