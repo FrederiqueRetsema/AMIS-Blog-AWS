@@ -15,7 +15,7 @@ domainname=`grep domainname ~/terraform.tfvars | awk -F" " '{print $3}' | awk -F
 # Destroy the shop first...
 # 
 
-cd ~/AMIS-unpublished/shop-1/shop
+cd ~/AMIS-Blog-AWS/shop-1/shop
 ./destroy-shop.sh
 if (test $? -ne 0)
 then
@@ -27,7 +27,7 @@ fi
 # Then destroy the infra...
 #
 
-cd ~/AMIS-unpublished/shop-1/init-infra
+cd ~/AMIS-Blog-AWS/shop-1/init-infra
 ./destroy-infra.sh
 if (test $? -ne 0)
 then
@@ -62,7 +62,7 @@ else
     #
     if (test "${answer^^}" == "YES")
     then
-        cd ~/AMIS-unpublished/shop-1/init-cert
+        cd ~/AMIS-Blog-AWS/shop-1/init-cert
         ./destroy-cert.sh
         if (test $? -ne 0)
         then
