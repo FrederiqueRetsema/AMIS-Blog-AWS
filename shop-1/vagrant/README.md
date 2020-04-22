@@ -54,7 +54,8 @@ In this example, I will create a new user, with administrator rights. This user 
 
 When I created this environment, I ran into trouble because I requested a certificate several times, and when I destroyed the environment I also destroyed my certificate. I then ran into the AWS limit on the maximum number of certificates per region per year, which turned out to be 20. This is not that much when you are testing. I therefore re-designed the solution, to create the certificate in a seperate step when you compare it to the rest of the infrastructural objects of this example. 
 
-Advice: if you use a certificate only for this shop example, then create the certificate the first time you use this environment. I will write several blogs, and you can destroy/install the shop environment (first "yes") and the infra environment (second "yes") and then leave the certificate as it is. In the next init-all.sh, the existing certificate will be recognised and not be requested again. You will then not walk into troubles when you follow this series of blogs.
+Advice: if you use a certificate only for this shop example, then create the certificate the first time you use this environment. I will write several blogs, and you can destroy/install the shop environment and then
+ leave the certificate as it is. In the next ` init-all.sh`, the existing certificate will be recognised and not be requested again. You will then not walk into troubles when you follow this series of blogs.
 
 After the last blog, you might want to destroy the certificate. 
 
