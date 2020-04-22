@@ -136,12 +136,13 @@ fi
 
 # Init the shop
 #
-# sleep 5 is needed, because the new credentials needs time to be distributed to all AWS machines. 
-# When we go too fase, we will get verification errors
+# sleep 15 is needed, because the new credentials needs time to be distributed to all AWS machines. 
+# When we go too fase, we will get verification errors (by not working Lambda functions or 500 errors
+# in the API Gateway)
 #
 # It is teed to /tmp, to be able to get the URL (for people who don't own a public domain in Route53)
 
-sleep 5
+sleep 15
 cd ~/AMIS-unpublished/shop-1/shop
 ./init-shop.sh | tee /tmp/output_init_shop.txt
 if (test $? -ne 0)
@@ -183,8 +184,8 @@ fi
 # To make the waiting less annoying, I'll give messages every 10 seconds...
 #
 echo ""
-echo "Please wait 60 seconds for AWS to deploy the permissions in the API gateway/Lambda."
-waitingtime=60
+echo "Please wait 30 seconds for AWS to deploy the permissions in the API gateway/Lambda."
+waitingtime=30
 while (test $waitingtime -gt 0)
 do
     echo "${waitingtime} seconds to wait..."
