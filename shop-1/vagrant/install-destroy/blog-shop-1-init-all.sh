@@ -25,18 +25,14 @@ fi
 
 # Get the CICD repo
 #
-if (! test -d ~/AMIS-unpublished)
+if (! test -d ~/AMIS-Blog-AWS)
 then
-    git clone https://github.com/FrederiqueRetsema/AMIS-unpublished
+    git clone https://github.com/FrederiqueRetsema/AMIS-Blog-AWS
     if (test $? -ne 0)
     then
       echo "GIT failed (clone)"
       exit 1
     fi
-
-    cd AMIS-unpublished
-    git config --global user.name "Frederique Retsema"
-    git config --global user.email "fretsema@fretsema.nl"
 fi
 
 # Configure tfvars
@@ -46,7 +42,7 @@ fi
 
 if (! test -f ~/terraform.tfvars)
 then
-  cp ~/AMIS-unpublished/shop-1/init-infra/terraform-template.tfvars ~/terraform.tfvars
+  cp ~/AMIS-Blog-AWS/shop-1/init-infra/terraform-template.tfvars ~/terraform.tfvars
 
   aws_access_key=`grep aws_access_key_id ~/.aws/credentials | awk -F" " '{print $3}'`
   aws_secret_key=`grep aws_secret_access_key ~/.aws/credentials | awk -F" " '{print $3}'`
@@ -93,7 +89,7 @@ then
   then
     echo "This domain doesn't have a star certificate yet, let's create one..."
 
-    cd ~/AMIS-unpublished/shop-1/init-cert
+    cd ~/AMIS-Blog-AWS/shop-1/init-cert
     ./init-cert.sh
     if (test $? -ne 0)
     then
@@ -126,7 +122,7 @@ fi
 # Init the rest of the environment
 #
 
-cd ~/AMIS-unpublished/shop-1/init-infra
+cd ~/AMIS-Blog-AWS/shop-1/init-infra
 ./init-infra.sh
 if (test $? -ne 0)
 then
@@ -142,7 +138,7 @@ fi
 # It is teed to /tmp, to be able to get the URL (for people who don't own a public domain in Route53)
 
 sleep 5
-cd ~/AMIS-unpublished/shop-1/shop
+cd ~/AMIS-Blog-AWS/shop-1/shop
 ./init-shop.sh | tee /tmp/output_init_shop.txt
 if (test $? -ne 0)
 then
