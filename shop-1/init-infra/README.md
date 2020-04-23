@@ -46,7 +46,7 @@ domainname             = "retsema.eu"             (domain name that is used for 
                                                    exists on the public internet).
 
 name_prefix            = "AMIS"                   (prefix for all objects: users, groups, policies, SNS topics, Lambda functions, etc)
-key_prefix             = "KeyL-"                  (when something goes wrong with destroying the environment, then the keys are 
+key_prefix             = "KeyM-"                  (when something goes wrong with destroying the environment, then the keys are 
                                                    destroyed but the aliases are not disconnected. When you try to create a new key 
                                                    with the same label (f.e. KeyI-AMIS1) then this will fail, even when the key is 
                                                    marked for deletion. See the faq in ../vagrant/faq.pdf how to fix this)

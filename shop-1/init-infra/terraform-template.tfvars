@@ -6,4 +6,4 @@ use_public_domain      = 0
 domainname             = "retsema.eu"
 
 name_prefix            = "AMIS"
-key_prefix             = "KeyL-"
+key_prefix             = "KeyM-"
