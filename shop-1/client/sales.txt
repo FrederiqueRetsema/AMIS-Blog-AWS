@@ -1,4 +1,4 @@
 {
-  "sales": [{"item_no" : "12345", "gross_number": "5", "gross_turnover": "50.00"},
+  "sales": [{"item_no" : "12345", "gross_number": "5", "gross_turnover": "60.00"},
             {"item_no" : "98",    "gross_number": "1", "gross_turnover": "2.45"}]
 }

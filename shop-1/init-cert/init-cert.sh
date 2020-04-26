@@ -7,14 +7,14 @@
 #
 # See also the README.md file in this directory.
 
-../../../terraform init --var-file=../../terraform.tfvars
+../../../terraform init --var-file=../../../terraform.tfvars
 if (test $? -ne 0)
 then
     print "Init of certificate failed"
     exit 1
 fi
 
-../../../terraform plan --var-file=../../terraform.tfvars --out terraform.tfplans
+../../../terraform plan --var-file=../../../terraform.tfvars --out terraform.tfplans
 if (test $? -ne 0)
 then
     print "Plan of certificate failed"

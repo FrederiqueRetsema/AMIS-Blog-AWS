@@ -9,7 +9,7 @@
 # 
 # See the README.md file in this directory for more information
 
-../../../terraform destroy --var-file=../../terraform.tfvars -auto-approve
+../../../terraform destroy --var-file=../../../terraform.tfvars -auto-approve
 if (test $? -ne 0)
 then
     print "Destroy of certificate failed"
