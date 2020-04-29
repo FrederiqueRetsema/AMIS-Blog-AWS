@@ -47,7 +47,7 @@ In this example, I will create a new user, with administrator rights. This user 
 ![alt text](https://frpublic.s3-eu-west-1.amazonaws.com/AMIS/blog+images/AWS+IAM+new+keys/7+Tags.png)
 8) In the review screen, press on "Create user"\
 ![alt text](https://frpublic.s3-eu-west-1.amazonaws.com/AMIS/blog+images/AWS+IAM+new+keys/8+Create+user.png)
-9) In the next screen, you see the Access key ID. Press on Show to see the Secret Access Key. Copy and paste these to your PC. You can also click on Download .csv to get this information. Please mind, that it is impossible to get the Secret access key from AWS the moment you leave this screen. Is it possible to delete the current key and create a new access key, if you want to. Press "Close" when you are done on this screen.\
+9) In the next screen, you see the Access key ID. Press on Show to see the Secret Access Key. Copy and paste these to your PC. You can also click on Download .csv to get this information. Please mind, that it is impossible to get the Secret access key from AWS the moment you leave this screen. It is possible to delete the current key and create a new access key, if you want to. Press "Close" when you are done on this screen.\
 ![alt text](https://frpublic.s3-eu-west-1.amazonaws.com/AMIS/blog+images/AWS+IAM+new+keys/9+Get+keys.png)
 
 ## Warning for AWS limits on certificates
