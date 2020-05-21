@@ -1,0 +1,13 @@
+bin/*
+certifi/*
+certifi-2020.4.5.1.dist-info/*
+chardet/*
+chardet-3.0.4.dist-info/*
+idna/*
+idna-2.9.dist-info/*
+requests/*
+requests-2.23.0.dist-info/*
+requirements.txt
+smoketest_test.zip
+urllib3/*
+urllib3-1.25.9.dist-info/*

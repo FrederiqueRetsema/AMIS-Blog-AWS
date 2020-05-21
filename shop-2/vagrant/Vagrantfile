@@ -1,0 +1,66 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure(2) do |config|
+  # For a complete reference, please see the online documentation at
+  # https://docs.vagrantup.com.
+
+  config.vm.box = "centos/7" 
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.name    = 'centos7-blog-shop-2'
+    vb.memory  = 2048
+    vb.cpus    = 1
+    vb.customize ["modifyvm", :id, "--natdnshostresolver1", "on"]
+    vb.customize ["modifyvm", :id, "--natdnsproxy1", "on"]
+  end
+
+  $script = <<-SCRIPT
+
+  # Sleep is necessary because the network is not available right after the start of the VM. All following actions
+  # depend heavilly on the network.
+
+  sleep 45
+
+  # Yum actions:
+  # - yum update
+  # - get all the packages that are needed for creating the AWS environment:
+  #   - python3     (for using the SDK to add users to AWS)
+  #   - git         (for downloading the repository that is used in the blog)
+  #   - zip/unzip   (for unzipping the terraform zip and to zip the lambda functions)
+  #   - python3-pip (for pip: this is used to get the newest boto3 version)
+  #   - awscli      (for the CLI of AWS, this is used to get the account number and to check if the star certificate for your domain already exists - or not)
+  #   - ntp         (for synchronizing the time between this VM and the rest of the world (including AWS): if the difference between the AWS time and our time is too big,
+  #                  the AWS commands will fail)
+
+  yum update -y
+  yum install python3 git zip unzip python3-pip awscli ntp -y
+  sed -i 's/^server/pool/' /etc/ntp.conf
+  systemctl enable ntpd
+  systemctl start ntpd
+
+  # Download and install terraform version 0.12.25
+
+  curl https://releases.hashicorp.com/terraform/0.12.25/terraform_0.12.25_linux_amd64.zip --output terraform.zip
+  unzip terraform.zip
+  rm terraform.zip
+
+  # Install boto3 and requests
+  # - boto3    = AWS SDK for Python3
+  # - requests = used by the client to do a POST request to an url
+
+  pip3 install boto3 requests
+
+  curl https://raw.githubusercontent.com/FrederiqueRetsema/AMIS-Blog-AWS/master/shop-2/vagrant/init-destroy/init-all.sh --output init-all.sh
+  chmod 755 ./init-all.sh
+  curl https://raw.githubusercontent.com/FrederiqueRetsema/AMIS-Blog-AWS/master/shop-2/vagrant/init-destroy/destroy-all.sh --output destroy-all.sh
+  chmod 755 ./destroy-all.sh
+
+  SCRIPT
+  
+  # The configuration is done, so enroll the script to the VM:
+
+  config.vm.provision "shell",
+      inline: $script
+	  
+end
