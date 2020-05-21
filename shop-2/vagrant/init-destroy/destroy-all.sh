@@ -4,7 +4,7 @@
 # --------------
 # 
 
-BLOG_REPO_NAME="AMIS-unpublished"
+BLOG_REPO_NAME="AMIS-Blog-AWS"
 BLOG_DIR="shop-2"
 
 # ask_yes_no_question
