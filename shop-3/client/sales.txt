@@ -1,0 +1,4 @@
+{
+  "sales": [{"item_no" : "90001", "gross_number": "5", "gross_turnover": "5"},
+            {"item_no" : "90002", "gross_number": "1", "gross_turnover": "2"}]
+}
