@@ -1,0 +1,217 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  OneTimeSignedUploadURLs
+
+  SAM template for OneTimeSignedUploadURLs (DynamoDB). See https://technology.amis.nl and search for "Using one-time upload URLs in AWS using DynamoDB"
+
+Parameters:
+  SMSNumber:
+     Description: 'Telephone number for SMS message (f.e. +31612345678)'
+     Type: 'String'
+  TimeoutInSeconds:
+    Description: 'Maximum time in seconds between the creation of the presigned url and the moment the file starts uploading (f.e. 30)'
+    Type: Number
+    Default: 30
+
+Globals:
+  Function:
+    Timeout: 10
+
+Resources:
+
+  # DynamoDB
+  ValidFileNamesTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      PrimaryKey: 
+        Name: FullFilename
+        Type: String     
+
+  # API Gateway with API Key
+  GetPresignedUrlAPIGW:
+    Type: AWS::Serverless::Api
+    Properties:
+      Auth: 
+        ApiKeyRequired: True
+        UsagePlan: 
+          CreateUsagePlan: PER_API
+          Description: Client Usage Plan
+          Quota: 
+            Limit: 1000
+            Period: 'DAY'
+          Throttle:
+            BurstLimit: 1000
+            RateLimit: 10000
+      StageName: Prod
+
+  # Lambda functions with X-Ray library
+  GetPresignedUrlFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: src/GetPresignedUrl
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      Description: Is called from the API gateway to get a signed URL to upload a file
+      Tracing: Active
+      Layers:
+        - !Ref Libs
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref SourceBucket
+          BUCKET_PREFIX: "uploads/"
+          DYNAMODB_TABLE: !Ref ValidFileNamesTable 
+          TIMEOUT_IN_SECONDS: !Ref TimeoutInSeconds
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - 's3:PutObject'
+                - 's3:PutObjectAcl'
+              Resource: [
+                {
+                  "Fn::Sub": [
+                    "arn:${AWS::Partition}:s3:::${SourceBucket}",
+                    {
+                      "bucketName": {
+                        "Ref": "SourceBucket"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "Fn::Sub": [
+                    "arn:${AWS::Partition}:s3:::${SourceBucket}/uploads/*",
+                    {
+                      "bucketName": {
+                        "Ref": "SourceBucket"
+                      }
+                    }
+                  ]
+                }
+              ]
+            - Effect: Allow
+              Action:
+                - 'dynamodb:PutItem'
+              Resource: !GetAtt ValidFileNamesTable.Arn
+      Events:
+        MyGetPresignedUrlAPIGW:
+          Type: Api
+          Properties:
+            Path: /getpresignedurl
+            Method: get
+            RestApiId: !Ref GetPresignedUrlAPIGW
+  MoveFirstUploadToAcceptedPrefix:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      CodeUri: src/MoveFirstUploadToAcceptedPrefix
+      Description: Is called when a file is uploaded to S3 with the uploads/ prefix 
+      Tracing: Active
+      Layers:
+        - !Ref Libs
+      Environment:
+        Variables:
+          DYNAMODB_TABLE: !Ref ValidFileNamesTable 
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - 's3:ListBucket'
+                - 's3:GetObject'
+                - 's3:PutObject'
+                - 's3:PutObjectAcl'
+                - 's3:DeleteObject'
+              Resource: [
+                'arn:aws:s3:::*',
+                'arn:aws:s3:::*/*']
+            - Effect: Allow
+              Action:
+                - 'dynamodb:DeleteItem'
+              Resource: !GetAtt ValidFileNamesTable.Arn
+      Events:
+        BucketEvent1:
+          Type: S3
+          Properties:
+            Bucket:
+              Ref: SourceBucket
+            Events:
+              - 's3:ObjectCreated:*'
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: uploads/
+  ProcessAcceptedFile:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      CodeUri: src/ProcessAcceptedFile
+      Description: Is called when a file is uploaded to S3 with the accepted/ prefix
+      Tracing: Active
+      Layers:
+        - !Ref Libs
+      Events:
+        BucketEvent1:
+          Type: S3
+          Properties:
+            Bucket:
+              Ref: SourceBucket
+            Events:
+              - 's3:ObjectCreated:*'
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: accepted/
+  Libs:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: xray-layer
+      Description: xray library
+      ContentUri: xray-layer
+      CompatibleRuntimes:
+        - python3.8
+    Metadata:
+      BuildMethod: makefile
+
+  # SNS
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+        - Protocol: sms
+          Endpoint: !Ref SMSNumber
+
+  # CloudWatch alarm
+  SecondUploadAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions: 
+        - !Ref AlarmTopic
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref MoveFirstUploadToAcceptedPrefix
+      DatapointsToAlarm: 1  # 1 out of 1
+      EvaluationPeriods: 1  # number of consecutive data points
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60            # seconds. Please mind, that after a test it takes between 5 and 10 minutes to get the alarm back on OK.
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  
+  # S3 bucket
+  SourceBucket:
+    Type: 'AWS::S3::Bucket'
+
+Outputs:
+
+  GetPresignedUrlApi:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${GetPresignedUrlAPIGW}.execute-api.${AWS::Region}.amazonaws.com/Prod/getpresignedurl"

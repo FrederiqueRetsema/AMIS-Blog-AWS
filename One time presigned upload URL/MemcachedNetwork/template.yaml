@@ -1,0 +1,119 @@
+# CloudFormationNetworkMemcached.yml
+# ==================================
+
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: CloudFormation template for Network components (Memcached)
+
+Metadata:
+  AWS::ServerlessRepo::Application:
+    Name: MemcachedNetwork
+    Description: VPC, subnets etc for Memcached network, see also the technology.amis.nl site and search for "One Time Presigned Upload Url in AWS using Memcached". 
+    Author: Frederique Retsema
+    SpdxLicenseId: 0BSD
+    LicenseUrl: LICENSE.txt
+    ReadmeUrl: README.md
+    Labels: ['S3', 'PresignedURL', 'Uploads']
+    HomePageUrl: https://github.com/FrederiqueRetsema/AMIS-Blog-AWS
+    SemanticVersion: 0.0.1
+    SourceCodeUrl: https://github.com/FrederiqueRetsema/AMIS-Blog-AWS
+
+Resources:
+
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties: 
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: MemcachedVPC
+
+  SubnetAZa:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Join ["", [!Ref "AWS::Region", "a"]]
+      CidrBlock: 10.0.0.0/24
+      MapPublicIpOnLaunch: true
+      VpcId: !Ref VPC
+  SubnetAZaRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref SubnetAZa
+
+  SubnetAZb:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Join ["", [!Ref "AWS::Region", "b"]]
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      VpcId: !Ref VPC
+  SubnetAZbRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref SubnetAZb
+
+  SubnetAZc:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Join ["", [!Ref "AWS::Region", "c"]]
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+      VpcId: !Ref VPC
+  SubnetAZcRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref RouteTable
+      SubnetId: !Ref SubnetAZc
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: RouteTable
+      VpcId: !Ref VPC
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: ASGSecurityGroup
+      GroupDescription: Securitygroup for the Memcached node and the Lambda connections within this demo
+      VpcId: !Ref VPC
+  SecurityGroupIngress:
+    DependsOn: SecurityGroup
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref SecurityGroup
+      IpProtocol: -1
+      ToPort: -1
+      FromPort: -1
+      SourceSecurityGroupId: !Ref SecurityGroup
+
+Outputs:
+
+  VpcId: 
+    Description: "Id of the VPC"
+    Value: !Ref VPC
+
+  SubnetAZa:
+    Description: "Id of Subnet AZa"
+    Value: !Ref SubnetAZa
+  SubnetAZb:
+    Description: "Id of Subnet AZb"
+    Value: !Ref SubnetAZb
+  SubnetAZc:
+    Description: "Id of Subnet AZc"
+    Value: !Ref SubnetAZc
+
+  RouteTableId:
+    Description: "Route table ID"
+    Value: !Ref RouteTable
+
+  SecurityGroup:
+    Description: "GroupId of the security group for instances in this demo"
+    Value: !GetAtt SecurityGroup.GroupId

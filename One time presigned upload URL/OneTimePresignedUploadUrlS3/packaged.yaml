@@ -1,0 +1,288 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'OneTimeSignedUploadURLsMemcached
+
+  SAM template for OneTimeSignedUploadURLs (Memcached). See https://technology.amis.nl
+  and search for "Using one-time upload URLs in AWS using Memcached"
+
+  '
+Parameters:
+  SMSNumber:
+    Description: Telephone number for SMS message (f.e. +31612345678)
+    Type: String
+  MemcachedNodeType:
+    Description: Node type for Memcached cluster, f.e. cache.t2.micro
+    Type: String
+    Default: cache.t2.micro
+  S3EndpointServiceName:
+    Description: S3 endpoint service name, f.e. com.amazonaws.eu-west-1.s3
+    Type: String
+    Default: com.amazonaws.eu-west-1.s3
+Globals:
+  Function:
+    Timeout: 10
+Resources:
+  MemcachedNetwork:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location:
+        ApplicationId: arn:aws:serverlessrepo:eu-west-1:300577164517:applications/MemcachedNetwork
+        SemanticVersion: '0.0.1'
+  S3VPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName:
+        Ref: S3EndpointServiceName
+      VpcEndpointType: Gateway
+      VpcId:
+        Fn::GetAtt:
+        - MemcachedNetwork
+        - Outputs.VpcId
+      RouteTableIds:
+      - Fn::GetAtt:
+        - MemcachedNetwork
+        - Outputs.RouteTableId
+  MemcachedSubnetGroup:
+    Type: AWS::ElastiCache::SubnetGroup
+    Properties:
+      Description: SubnetGroup for Memcached
+      SubnetIds:
+      - Fn::GetAtt:
+        - MemcachedNetwork
+        - Outputs.SubnetAZa
+      - Fn::GetAtt:
+        - MemcachedNetwork
+        - Outputs.SubnetAZb
+      - Fn::GetAtt:
+        - MemcachedNetwork
+        - Outputs.SubnetAZc
+  MemcachedParameterGroup:
+    Type: AWS::ElastiCache::ParameterGroup
+    Properties:
+      CacheParameterGroupFamily: memcached1.6
+      Description: ParameterGroup for Memcached
+  MemcachedCluster:
+    Type: AWS::ElastiCache::CacheCluster
+    Properties:
+      CacheNodeType:
+        Ref: MemcachedNodeType
+      CacheParameterGroupName:
+        Ref: MemcachedParameterGroup
+      CacheSubnetGroupName:
+        Ref: MemcachedSubnetGroup
+      Engine: memcached
+      EngineVersion: 1.6
+      NumCacheNodes: 1
+      Port: 11211
+      VpcSecurityGroupIds:
+      - Fn::GetAtt:
+        - MemcachedNetwork
+        - Outputs.SecurityGroup
+  GetPresignedUrlAPIGW:
+    Type: AWS::Serverless::Api
+    Properties:
+      Auth:
+        ApiKeyRequired: true
+        UsagePlan:
+          CreateUsagePlan: PER_API
+          Description: Client Usage Plan
+          Quota:
+            Limit: 1000
+            Period: DAY
+          Throttle:
+            BurstLimit: 1000
+            RateLimit: 10000
+      StageName: Prod
+  GetPresignedUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://fra-euwest1/OneTimePresignedUploadUrlMemcached/7acb309e5ed19906e581d66c9d369822
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      Description: Is called from the API gateway to get a signed URL to upload a
+        file
+      Tracing: Active
+      Layers:
+      - Ref: Libs
+      Environment:
+        Variables:
+          BUCKET_NAME:
+            Ref: SourceBucket
+          BUCKET_PREFIX: uploads/
+          MEMCACHED_ENDPOINT:
+            Fn::Join:
+            - ''
+            - - Fn::GetAtt:
+                - MemcachedCluster
+                - ConfigurationEndpoint.Address
+              - ':'
+              - Fn::GetAtt:
+                - MemcachedCluster
+                - ConfigurationEndpoint.Port
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - s3:PutObject
+          - s3:PutObjectAcl
+          Resource:
+          - Fn::Sub:
+            - arn:${AWS::Partition}:s3:::${SourceBucket}
+            - bucketName:
+                Ref: SourceBucket
+          - Fn::Sub:
+            - arn:${AWS::Partition}:s3:::${SourceBucket}/uploads/*
+            - bucketName:
+                Ref: SourceBucket
+      Events:
+        MyGetPresignedUrlAPIGW:
+          Type: Api
+          Properties:
+            Path: /getpresignedurl
+            Method: get
+            RestApiId:
+              Ref: GetPresignedUrlAPIGW
+      VpcConfig:
+        SecurityGroupIds:
+        - Fn::GetAtt:
+          - MemcachedNetwork
+          - Outputs.SecurityGroup
+        SubnetIds:
+        - Fn::GetAtt:
+          - MemcachedNetwork
+          - Outputs.SubnetAZa
+        - Fn::GetAtt:
+          - MemcachedNetwork
+          - Outputs.SubnetAZb
+        - Fn::GetAtt:
+          - MemcachedNetwork
+          - Outputs.SubnetAZc
+  MoveFirstUploadToAcceptedPrefix:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      CodeUri: s3://fra-euwest1/OneTimePresignedUploadUrlMemcached/6484d93de98a937a4e9a4886625d27f1
+      Description: Is called when a file is uploaded to S3 with the uploads/ prefix
+      Tracing: Active
+      Layers:
+      - Ref: Libs
+      Environment:
+        Variables:
+          MEMCACHED_ENDPOINT:
+            Fn::Join:
+            - ''
+            - - Fn::GetAtt:
+                - MemcachedCluster
+                - ConfigurationEndpoint.Address
+              - ':'
+              - Fn::GetAtt:
+                - MemcachedCluster
+                - ConfigurationEndpoint.Port
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - s3:ListBucket
+          - s3:GetObject
+          - s3:PutObject
+          - s3:PutObjectAcl
+          - s3:DeleteObject
+          Resource:
+          - arn:aws:s3:::*
+          - arn:aws:s3:::*/*
+      Events:
+        BucketEvent1:
+          Type: S3
+          Properties:
+            Bucket:
+              Ref: SourceBucket
+            Events:
+            - s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                - Name: prefix
+                  Value: uploads/
+      VpcConfig:
+        SecurityGroupIds:
+        - Fn::GetAtt:
+          - MemcachedNetwork
+          - Outputs.SecurityGroup
+        SubnetIds:
+        - Fn::GetAtt:
+          - MemcachedNetwork
+          - Outputs.SubnetAZa
+        - Fn::GetAtt:
+          - MemcachedNetwork
+          - Outputs.SubnetAZb
+        - Fn::GetAtt:
+          - MemcachedNetwork
+          - Outputs.SubnetAZc
+  ProcessAcceptedFile:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      CodeUri: s3://fra-euwest1/OneTimePresignedUploadUrlMemcached/104165237821c3592268f2bf7f0de206
+      Description: Is called when a file is uploaded to S3 with the accepted/ prefix
+      Tracing: Active
+      Layers:
+      - Ref: Libs
+      Events:
+        BucketEvent1:
+          Type: S3
+          Properties:
+            Bucket:
+              Ref: SourceBucket
+            Events:
+            - s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                - Name: prefix
+                  Value: accepted/
+  Libs:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: xray-layer
+      Description: xray library
+      ContentUri: s3://fra-euwest1/OneTimePresignedUploadUrlMemcached/19542a40ad2a88c491856e82304404a7
+      CompatibleRuntimes:
+      - python3.8
+    Metadata:
+      BuildMethod: makefile
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+      - Protocol: sms
+        Endpoint:
+          Ref: SMSNumber
+  SecondUploadAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions:
+      - Ref: AlarmTopic
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: FunctionName
+        Value:
+          Ref: MoveFirstUploadToAcceptedPrefix
+      DatapointsToAlarm: 1
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  SourceBucket:
+    Type: AWS::S3::Bucket
+Outputs:
+  GetPresignedUrlApi:
+    Description: API Gateway endpoint URL
+    Value:
+      Fn::Sub: https://${GetPresignedUrlAPIGW}.execute-api.${AWS::Region}.amazonaws.com/Prod/getpresignedurl
