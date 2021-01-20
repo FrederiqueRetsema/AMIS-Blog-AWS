@@ -1,0 +1,205 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'OneTimeSignedUploadURLs
+
+  SAM template for OneTimeSignedUploadURLs (DynamoDB). See https://technology.amis.nl
+  and search for "Using one-time upload URLs in AWS using DynamoDB"
+
+  '
+Parameters:
+  SMSNumber:
+    Description: Telephone number for SMS message (f.e. +31612345678)
+    Type: String
+  TimeoutInSeconds:
+    Description: Maximum time in seconds between the creation of the presigned url
+      and the moment the file starts uploading (f.e. 30)
+    Type: Number
+    Default: 30
+Globals:
+  Function:
+    Timeout: 10
+Resources:
+  ValidFileNamesTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      PrimaryKey:
+        Name: FullFilename
+        Type: String
+  GetPresignedUrlAPIGW:
+    Type: AWS::Serverless::Api
+    Properties:
+      Auth:
+        ApiKeyRequired: true
+        UsagePlan:
+          CreateUsagePlan: PER_API
+          Description: Client Usage Plan
+          Quota:
+            Limit: 1000
+            Period: DAY
+          Throttle:
+            BurstLimit: 1000
+            RateLimit: 10000
+      StageName: Prod
+  GetPresignedUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://fra-euwest1/OneTimePresignedUploadUrlDynamoDB/141c82dff6fe25710d184127f138c772
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      Description: Is called from the API gateway to get a signed URL to upload a
+        file
+      Tracing: Active
+      Layers:
+      - Ref: Libs
+      Environment:
+        Variables:
+          BUCKET_NAME:
+            Ref: SourceBucket
+          BUCKET_PREFIX: uploads/
+          DYNAMODB_TABLE:
+            Ref: ValidFileNamesTable
+          TIMEOUT_IN_SECONDS:
+            Ref: TimeoutInSeconds
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - s3:PutObject
+          - s3:PutObjectAcl
+          Resource:
+          - Fn::Sub:
+            - arn:${AWS::Partition}:s3:::${SourceBucket}
+            - bucketName:
+                Ref: SourceBucket
+          - Fn::Sub:
+            - arn:${AWS::Partition}:s3:::${SourceBucket}/uploads/*
+            - bucketName:
+                Ref: SourceBucket
+        - Effect: Allow
+          Action:
+          - dynamodb:PutItem
+          Resource:
+            Fn::GetAtt:
+            - ValidFileNamesTable
+            - Arn
+      Events:
+        MyGetPresignedUrlAPIGW:
+          Type: Api
+          Properties:
+            Path: /getpresignedurl
+            Method: get
+            RestApiId:
+              Ref: GetPresignedUrlAPIGW
+  MoveFirstUploadToAcceptedPrefix:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      CodeUri: s3://fra-euwest1/OneTimePresignedUploadUrlDynamoDB/b216a588f1cc7ef381ec2ffc675204d9
+      Description: Is called when a file is uploaded to S3 with the uploads/ prefix
+      Tracing: Active
+      Layers:
+      - Ref: Libs
+      Environment:
+        Variables:
+          DYNAMODB_TABLE:
+            Ref: ValidFileNamesTable
+      Policies:
+      - Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - s3:ListBucket
+          - s3:GetObject
+          - s3:PutObject
+          - s3:PutObjectAcl
+          - s3:DeleteObject
+          Resource:
+          - arn:aws:s3:::*
+          - arn:aws:s3:::*/*
+        - Effect: Allow
+          Action:
+          - dynamodb:DeleteItem
+          Resource:
+            Fn::GetAtt:
+            - ValidFileNamesTable
+            - Arn
+      Events:
+        BucketEvent1:
+          Type: S3
+          Properties:
+            Bucket:
+              Ref: SourceBucket
+            Events:
+            - s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                - Name: prefix
+                  Value: uploads/
+  ProcessAcceptedFile:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      CodeUri: s3://fra-euwest1/OneTimePresignedUploadUrlDynamoDB/f8c097e3d361977536501ae3c7f86b50
+      Description: Is called when a file is uploaded to S3 with the accepted/ prefix
+      Tracing: Active
+      Layers:
+      - Ref: Libs
+      Events:
+        BucketEvent1:
+          Type: S3
+          Properties:
+            Bucket:
+              Ref: SourceBucket
+            Events:
+            - s3:ObjectCreated:*
+            Filter:
+              S3Key:
+                Rules:
+                - Name: prefix
+                  Value: accepted/
+  Libs:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: xray-layer
+      Description: xray library
+      ContentUri: s3://fra-euwest1/OneTimePresignedUploadUrlDynamoDB/38495061cd29a1205875fe1efed98165
+      CompatibleRuntimes:
+      - python3.8
+    Metadata:
+      BuildMethod: makefile
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+      - Protocol: sms
+        Endpoint:
+          Ref: SMSNumber
+  SecondUploadAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions:
+      - Ref: AlarmTopic
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: FunctionName
+        Value:
+          Ref: MoveFirstUploadToAcceptedPrefix
+      DatapointsToAlarm: 1
+      EvaluationPeriods: 1
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      TreatMissingData: notBreaching
+  SourceBucket:
+    Type: AWS::S3::Bucket
+Outputs:
+  GetPresignedUrlApi:
+    Description: API Gateway endpoint URL
+    Value:
+      Fn::Sub: https://${GetPresignedUrlAPIGW}.execute-api.${AWS::Region}.amazonaws.com/Prod/getpresignedurl
